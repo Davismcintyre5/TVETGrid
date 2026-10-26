@@ -1,0 +1,52 @@
+{
+  "name": "tvetgrid-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TVETGrid API — Express + Mongoose + Redis + LiveKit + Cloudinary + HDM Bridge + HDM AI",
+  "author": "Davis Okoth <davismcintyre5@gmail.com>",
+  "license": "UNLICENSED",
+  "company": "HDM",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "nodemon",
+    "dev:worker": "nodemon --config nodemon.worker.json",
+    "start": "node server.js",
+    "start:worker": "node worker.js",
+    "admin": "node scripts/admin.js",
+    "seed": "node scripts/seed.js",
+    "dns": "node scripts/dnsset.js verify",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.6.0",
+    "ioredis": "^5.4.1",
+    "bullmq": "^5.12.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "zod": "^3.23.8",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "express-rate-limit": "^7.4.0",
+    "rate-limit-redis": "^4.2.0",
+    "cloudinary": "^2.4.0",
+    "multer": "^1.4.5-lts.1",
+    "livekit-server-sdk": "^2.6.0",
+    "socket.io": "^4.7.5",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.5",
+    "nodemailer": "^6.9.14"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.3",
+    "supertest": "^7.0.0"
+  }
+}

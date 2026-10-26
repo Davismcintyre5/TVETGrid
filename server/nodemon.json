@@ -1,0 +1,22 @@
+{
+  "watch": ["."],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules",
+    ".git",
+    "logs",
+    "scripts",
+    "schedulers",
+    "jobs",
+    "templates",
+    "*.test.js",
+    ".env",
+    ".env.*"
+  ],
+  "delay": 300,
+  "verbose": false,
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "exec": "node server.js"
+}
