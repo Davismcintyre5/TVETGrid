@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { config } from '@/config';
 import { authStore } from '@/lib/auth';
 import { useAuth } from './AuthContext';
 
@@ -16,7 +15,7 @@ export function SocketProvider({ children }) {
     if (!token) return null;
     if (ref.current && ref.current.connected) return ref.current;
     if (ref.current) ref.current.disconnect();
-    ref.current = io(`${config.socketUrl}${namespace}`, {
+    ref.current = io(namespace, {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,

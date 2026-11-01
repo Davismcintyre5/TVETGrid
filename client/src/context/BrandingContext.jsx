@@ -1,12 +1,11 @@
 import { createContext, useContext, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { siteApi } from '@/api';
-import { config } from '@/config';
 
 const BrandingContext = createContext(null);
 
 const FALLBACK = {
-  appName: config.appName,
+  appName: 'TVETGrid',
   logoUrl: '',
   supportEmail: '',
   supportPhone: '',

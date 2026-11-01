@@ -11,7 +11,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "nodemon",
+    "dev": "nodemon server.js",
     "dev:worker": "nodemon --config nodemon.worker.json",
     "start": "node server.js",
     "start:worker": "node worker.js",
@@ -19,7 +19,11 @@
     "seed": "node scripts/seed.js",
     "dns": "node scripts/dnsset.js verify",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "install:client": "npm --prefix client install",
+    "build:client": "npm --prefix client run build",
+    "pwa": "npm --prefix client run pwa",
+    "build": "npm run install:client && npm run pwa && npm run build:client"
   },
   "dependencies": {
     "express": "^4.19.2",

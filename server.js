@@ -2,6 +2,8 @@ require('dotenv').config();
 
 const http = require('http');
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 
 const env = require('./config/env');
 const { connectDB, disconnectDB } = require('./config/db');
@@ -24,6 +26,9 @@ let isShuttingDown = false;
 let schedulersRegistered = false;
 let queueWorkerStarted = false;
 
+const CLIENT_DIST = path.join(__dirname, 'client', 'dist');
+const CLIENT_INDEX = path.join(CLIENT_DIST, 'index.html');
+
 function buildApp() {
   const app = express();
   app.set('trust proxy', 1);
@@ -35,7 +40,8 @@ function buildApp() {
   app.use(bodyParser);
   app.use(globalRateLimiter);
 
-  app.get('/', (req, res) => {
+  app.get('/', (req, res, next) => {
+    if (fs.existsSync(CLIENT_INDEX)) return next();
     res.status(200).json({
       success: true,
       message: `${env.appName} API`,
@@ -81,6 +87,33 @@ function buildApp() {
     } else {
       throw err;
     }
+  }
+
+  if (fs.existsSync(CLIENT_INDEX)) {
+    app.use(express.static(CLIENT_DIST, {
+      index: false,
+      maxAge: '1h',
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        } else if (/\.[0-9a-f]{8,}\.(js|css)$/i.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
+
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path === '/health') {
+        return next();
+      }
+      res.sendFile(CLIENT_INDEX, (err) => {
+        if (err) next(err);
+      });
+    });
+
+    logger.info(`Serving client from ${CLIENT_DIST}`);
+  } else {
+    logger.warn(`Client build not found at ${CLIENT_DIST} — run "npm run build:client"`);
   }
 
   app.use(notFound);

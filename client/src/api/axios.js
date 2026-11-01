@@ -1,9 +1,10 @@
 import axios from 'axios';
-import { config } from '@/config';
 import { authStore } from '@/lib/auth';
 
+const API_BASE = '/api';
+
 const api = axios.create({
-  baseURL: `${config.apiUrl}/api`,
+  baseURL: API_BASE,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -64,7 +65,7 @@ api.interceptors.response.use(
           const refreshToken = authStore.getRefreshToken();
           if (!refreshToken) throw new Error('No refresh token');
           refreshPromise = axios
-            .post(`${config.apiUrl}/api/client/auth/refresh`, { refreshToken })
+            .post(`${API_BASE}/client/auth/refresh`, { refreshToken })
             .then((r) => {
               const payload = r?.data?.data || r?.data;
               const accessToken = payload?.accessToken;
