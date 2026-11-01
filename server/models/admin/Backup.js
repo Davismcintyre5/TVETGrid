@@ -3,27 +3,30 @@ const { BACKUP_STATUS } = require('../../utils/constants');
 
 const backupSchema = new mongoose.Schema(
   {
-    publicId: { type: String, index: true },
-    url: { type: String },
-    fileName: { type: String },
+    status: {
+      type: String,
+      enum: Object.values(BACKUP_STATUS),
+      default: BACKUP_STATUS.RUNNING,
+      index: true,
+    },
+    type: { type: String, enum: ['manual', 'scheduled'], default: 'manual' },
+    fileName: { type: String, required: true },
+    publicId: { type: String, default: null },
+    url: { type: String, default: null },
     size: { type: Number, default: 0 },
-    status: { type: String, enum: Object.values(BACKUP_STATUS), default: BACKUP_STATUS.RUNNING, index: true },
-    type: { type: String, enum: ['manual', 'scheduled', 'uploaded'], default: 'manual', index: true },
     collections: { type: [String], default: [] },
     documentsCount: { type: Number, default: 0 },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
-    error: { type: String },
-    completedAt: { type: Date },
-    downloadedAt: { type: Date },
+    error: { type: String, default: null },
+    completedAt: { type: Date, default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
     downloadCount: { type: Number, default: 0 },
-    emailedTo: [{ type: String, lowercase: true, trim: true }],
-    emailedAt: { type: Date },
+    downloadedAt: { type: Date, default: null },
+    emailedTo: { type: [String], default: [] },
+    emailedAt: { type: Date, default: null },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true }
 );
 
 backupSchema.index({ createdAt: -1 });
-backupSchema.index({ status: 1, createdAt: -1 });
-backupSchema.index({ type: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Backup', backupSchema);

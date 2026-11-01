@@ -1,17 +1,17 @@
 const router = require('express').Router();
 const ctrl = require('../../controllers/admin/paperController');
-const auth = require('../../middleware/admin/auth');
-const requireAdmin = require('../../middleware/admin/requireAdmin');
-const auditLog = require('../../middleware/admin/auditLog');
-
-router.use(auth, requireAdmin);
 
 router.get('/', ctrl.list);
-router.get('/:id', ctrl.getById);
-router.post('/', auditLog('paper:create'), ctrl.create);
-router.patch('/:id', auditLog('paper:update'), ctrl.update);
-router.delete('/:id', auditLog('paper:delete'), ctrl.remove);
+router.post('/', ctrl.create);
 
-router.patch('/:id/questions', auditLog('paper:save-questions'), ctrl.saveQuestions);
+router.post('/upload/sign', ctrl.sign);
+router.post('/upload/confirm', ctrl.confirm);
+
+router.get('/:id', ctrl.getOne);
+router.patch('/:id', ctrl.update);
+router.patch('/:id/rename', ctrl.rename);
+router.patch('/:id/replace', ctrl.replace);
+router.patch('/:id/questions', ctrl.updateQuestions);
+router.delete('/:id', ctrl.remove);
 
 module.exports = router;

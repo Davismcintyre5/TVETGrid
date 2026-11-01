@@ -1,24 +1,67 @@
 const mongoose = require('mongoose');
 const { VISIBILITY } = require('../../utils/constants');
 
-const attachmentSchema = new mongoose.Schema(
-  { publicId: { type: String }, url: { type: String, required: true }, name: { type: String } },
+const fileSchema = new mongoose.Schema(
+  {
+    publicId: { type: String, required: true },
+    url: { type: String, required: true },
+    fileName: { type: String, default: null },
+    size: { type: Number, default: null },
+    mimeType: { type: String, default: 'application/octet-stream' },
+    resourceType: { type: String, default: 'auto' },
+  },
+  { _id: false }
+);
+
+const generatedQuestionSchema = new mongoose.Schema(
+  {
+    qid: { type: String, required: true },
+    stem: { type: String, required: true },
+    options: { type: [String], default: [] },
+    answer: { type: String, required: true },
+    solution: { type: String, default: '' },
+    difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
+    marks: { type: Number, default: 1 },
+  },
   { _id: false }
 );
 
 const noteSchema = new mongoose.Schema(
   {
-    courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true, index: true },
-    topicId: { type: mongoose.Schema.Types.ObjectId, ref: 'Topic', index: true },
     title: { type: String, required: true, trim: true },
-    bodyMd: { type: String, required: true },
-    attachments: { type: [attachmentSchema], default: [] },
-    authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
-    visibility: { type: String, enum: Object.values(VISIBILITY), default: VISIBILITY.PUBLIC, index: true },
+    description: { type: String, default: '' },
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      required: true,
+      index: true,
+    },
+    subjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subject',
+      required: true,
+      index: true,
+    },
+    visibility: {
+      type: String,
+      enum: Object.values(VISIBILITY),
+      default: VISIBILITY.PUBLIC,
+      index: true,
+    },
+    bodyMd: { type: String, default: '' },
+    files: { type: [fileSchema], default: [] },
+    generatedQuestions: { type: [generatedQuestionSchema], default: [] },
+    questionsStatus: {
+      type: String,
+      enum: ['idle', 'queued', 'processing', 'done', 'failed'],
+      default: 'idle',
+    },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true }
 );
 
-noteSchema.index({ courseId: 1, topicId: 1, createdAt: -1 });
+noteSchema.index({ courseId: 1, subjectId: 1, visibility: 1, createdAt: -1 });
+noteSchema.index({ title: 'text', description: 'text', bodyMd: 'text' });
 
 module.exports = mongoose.model('Note', noteSchema);

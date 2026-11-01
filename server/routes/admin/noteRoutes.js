@@ -1,17 +1,17 @@
 const router = require('express').Router();
 const ctrl = require('../../controllers/admin/noteController');
-const auth = require('../../middleware/admin/auth');
-const requireAdmin = require('../../middleware/admin/requireAdmin');
-const auditLog = require('../../middleware/admin/auditLog');
-
-router.use(auth, requireAdmin);
 
 router.get('/', ctrl.list);
-router.get('/:id', ctrl.getById);
-router.post('/', auditLog('note:create'), ctrl.create);
-router.patch('/:id', auditLog('note:update'), ctrl.update);
-router.delete('/:id', auditLog('note:delete'), ctrl.remove);
+router.post('/', ctrl.create);
 
-router.post('/:id/generate-questions', auditLog('note:generate-questions'), ctrl.generateQuestions);
+router.post('/upload/sign', ctrl.sign);
+router.post('/upload/confirm', ctrl.confirm);
+
+router.get('/:id', ctrl.getOne);
+router.patch('/:id', ctrl.update);
+router.patch('/:id/rename', ctrl.rename);
+router.patch('/:id/replace', ctrl.replace);
+router.post('/:id/generate-questions', ctrl.generateQuestions);
+router.delete('/:id', ctrl.remove);
 
 module.exports = router;

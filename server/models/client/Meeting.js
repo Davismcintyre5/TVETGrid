@@ -1,23 +1,54 @@
 const mongoose = require('mongoose');
 const { MEETING_STATUS } = require('../../utils/constants');
 
-const meetingSchema = new mongoose.Schema(
+const meetingSettingsSchema = new mongoose.Schema(
   {
-    hostId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', index: true },
-    title: { type: String, required: true, trim: true },
-    roomId: { type: String, required: true, unique: true, index: true },
-    scheduledAt: { type: Date, required: true, index: true },
-    durationMin: { type: Number, required: true, min: 1 },
-    status: { type: String, enum: Object.values(MEETING_STATUS), default: MEETING_STATUS.SCHEDULED, index: true },
-    recordingUrl: { type: String },
-    startedAt: { type: Date },
-    endedAt: { type: Date },
+    muteAll: { type: Boolean, default: false },
+    videoOffAll: { type: Boolean, default: false },
+    chatDisabled: { type: Boolean, default: false },
+    reactionsDisabled: { type: Boolean, default: false },
+    locked: { type: Boolean, default: false },
+    allowGuestJoin: { type: Boolean, default: false },
   },
-  { timestamps: true, versionKey: false }
+  { _id: false }
 );
 
-meetingSchema.index({ hostId: 1, scheduledAt: -1 });
-meetingSchema.index({ status: 1, scheduledAt: 1 });
+const meetingSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, default: '' },
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      default: null,
+      index: true,
+    },
+    hostId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    scheduledAt: { type: Date, required: true, index: true },
+    durationMin: { type: Number, default: 60 },
+    startedAt: { type: Date, default: null },
+    endedAt: { type: Date, default: null },
+    status: {
+      type: String,
+      enum: Object.values(MEETING_STATUS),
+      default: MEETING_STATUS.SCHEDULED,
+      index: true,
+    },
+    roomName: { type: String, required: true, unique: true, index: true },
+    recordingUrl: { type: String, default: null },
+    recordingPublicId: { type: String, default: null },
+    settings: { type: meetingSettingsSchema, default: () => ({}) },
+    removedUserIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  },
+  { timestamps: true }
+);
+
+meetingSchema.index({ scheduledAt: -1, status: 1 });
+meetingSchema.index({ hostId: 1, status: 1 });
 
 module.exports = mongoose.model('Meeting', meetingSchema);

@@ -22,6 +22,7 @@ const errorHandler = require('./middleware/global/errorHandler');
 const STARTED_AT = Date.now();
 let isShuttingDown = false;
 let schedulersRegistered = false;
+let queueWorkerStarted = false;
 
 function buildApp() {
   const app = express();
@@ -106,6 +107,19 @@ async function startBackgroundWork() {
       throw err;
     }
   }
+
+  try {
+    const queueService = require('./services/queueService');
+    await queueService.startWorker();
+    queueWorkerStarted = true;
+    logger.info('Queue worker started');
+  } catch (err) {
+    if (err.code === 'MODULE_NOT_FOUND') {
+      logger.warn('queueService not found — skipping queue worker');
+    } else {
+      throw err;
+    }
+  }
 }
 
 async function stopBackgroundWork() {
@@ -113,7 +127,20 @@ async function stopBackgroundWork() {
     try {
       const { stopAllSchedulers } = require('./schedulers');
       if (typeof stopAllSchedulers === 'function') await stopAllSchedulers();
-    } catch (e) { logger.error('Schedulers stop failed', { err: e.message }); }
+    } catch (e) {
+      logger.error('Schedulers stop failed', { err: e.message });
+    }
+  }
+
+  if (queueWorkerStarted) {
+    try {
+      const queueService = require('./services/queueService');
+      await queueService.stopWorker();
+    } catch (e) {
+      if (e.code !== 'MODULE_NOT_FOUND') {
+        logger.error('Queue worker stop failed', { err: e.message });
+      }
+    }
   }
 }
 

@@ -1,77 +1,75 @@
-const { z } = require('zod');
 const LegalDoc = require('../../models/admin/LegalDoc');
 const ApiError = require('../../utils/ApiError');
-const ApiResponse = require('../../utils/ApiResponse');
+const { ok, created } = require('../../utils/ApiResponse');
+const asyncHandler = require('../../utils/asyncHandler');
 
-const slugSchema = z.object({ slug: z.string().min(2).max(60) });
-
-const createSchema = z.object({
-  slug: z.string().min(2).max(60),
-  title: z.string().min(2).max(120),
-  bodyMd: z.string().min(1),
-  effectiveAt: z.coerce.date().optional(),
-  isPublished: z.boolean().optional(),
+const list = asyncHandler(async (req, res) => {
+  const items = await LegalDoc.find().sort({ slug: 1 }).lean();
+  return ok(res, items);
 });
 
-const updateSchema = createSchema.partial().omit({ slug: true });
+const getOne = asyncHandler(async (req, res) => {
+  const doc = await LegalDoc.findOne({ slug: req.params.slug }).lean();
+  if (!doc) throw ApiError.notFound('Legal doc not found');
+  return ok(res, doc);
+});
 
-async function list(req, res, next) {
-  try {
-    const items = await LegalDoc.find().sort({ slug: 1 }).lean();
-    return ApiResponse.ok(res, items);
-  } catch (err) { next(err); }
-}
+const getVersions = asyncHandler(async (req, res) => {
+  const doc = await LegalDoc.findOne({ slug: req.params.slug }).select('slug title versions').lean();
+  if (!doc) throw ApiError.notFound('Legal doc not found');
+  return ok(res, doc);
+});
 
-async function getBySlug(req, res, next) {
-  try {
-    const { slug } = slugSchema.parse(req.params);
-    const doc = await LegalDoc.findOne({ slug }).lean();
-    if (!doc) throw ApiError.notFound('Legal document not found');
-    return ApiResponse.ok(res, doc);
-  } catch (err) { next(err); }
-}
+const create = asyncHandler(async (req, res) => {
+  const { slug, title, bodyMd, isPublished, effectiveAt } = req.body || {};
+  if (!slug || !title) throw ApiError.badRequest('slug and title required', 'VALIDATION_001');
 
-async function versions(req, res, next) {
-  try {
-    const { slug } = slugSchema.parse(req.params);
-    const doc = await LegalDoc.findOne({ slug }).lean();
-    if (!doc) throw ApiError.notFound('Legal document not found');
-    return ApiResponse.ok(res, { slug, version: doc.version, updatedAt: doc.updatedAt });
-  } catch (err) { next(err); }
-}
+  const existing = await LegalDoc.findOne({ slug: String(slug).toLowerCase() }).lean();
+  if (existing) throw ApiError.conflict('A doc with this slug already exists', 'CONFLICT');
 
-async function create(req, res, next) {
-  try {
-    const data = createSchema.parse(req.body);
-    const existing = await LegalDoc.findOne({ slug: data.slug }).lean();
-    if (existing) throw ApiError.conflict('Legal document with this slug exists', 'SLUG_EXISTS');
-    const doc = await LegalDoc.create(data);
-    return ApiResponse.created(res, doc, 'Legal document created');
-  } catch (err) { next(err); }
-}
+  const doc = await LegalDoc.create({
+    slug: String(slug).toLowerCase(),
+    title,
+    bodyMd: bodyMd || '',
+    isPublished: !!isPublished,
+    effectiveAt: effectiveAt || null,
+    version: 1,
+    createdBy: req.user.id,
+  });
 
-async function update(req, res, next) {
-  try {
-    const { slug } = slugSchema.parse(req.params);
-    const patch = updateSchema.parse(req.body);
-    const doc = await LegalDoc.findOneAndUpdate({ slug }, { $set: patch }, { new: true }).lean();
-    if (!doc) throw ApiError.notFound('Legal document not found');
-    return ApiResponse.ok(res, doc, 'Legal document updated');
-  } catch (err) { next(err); }
-}
+  return created(res, doc.toObject(), 'Legal doc created');
+});
 
-async function publish(req, res, next) {
-  try {
-    const { slug } = slugSchema.parse(req.params);
-    const doc = await LegalDoc.findOne({ slug });
-    if (!doc) throw ApiError.notFound('Legal document not found');
-    doc.isPublished = true;
-    doc.publishedAt = new Date();
-    doc.version = (doc.version || 0) + 1;
-    doc.effectiveAt = doc.effectiveAt || new Date();
-    await doc.save();
-    return ApiResponse.ok(res, doc.toObject(), 'Legal document published');
-  } catch (err) { next(err); }
-}
+const update = asyncHandler(async (req, res) => {
+  const doc = await LegalDoc.findOne({ slug: req.params.slug });
+  if (!doc) throw ApiError.notFound('Legal doc not found');
 
-module.exports = { list, getBySlug, versions, create, update, publish };
+  const { title, bodyMd, effectiveAt, isPublished } = req.body || {};
+  if (typeof title === 'string') doc.title = title;
+  if (typeof bodyMd === 'string') doc.bodyMd = bodyMd;
+  if (effectiveAt !== undefined) doc.effectiveAt = effectiveAt || null;
+  if (typeof isPublished === 'boolean') doc.isPublished = isPublished;
+
+  await doc.save();
+  return ok(res, doc.toObject(), 'Legal doc updated');
+});
+
+const publish = asyncHandler(async (req, res) => {
+  const doc = await LegalDoc.findOne({ slug: req.params.slug });
+  if (!doc) throw ApiError.notFound('Legal doc not found');
+
+  doc.versions.push({
+    version: doc.version,
+    bodyMd: doc.bodyMd,
+    effectiveAt: doc.effectiveAt,
+    publishedAt: new Date(),
+    publishedBy: req.user.id,
+  });
+  doc.version += 1;
+  doc.isPublished = true;
+  await doc.save();
+
+  return ok(res, doc.toObject(), `Published (v${doc.version})`);
+});
+
+module.exports = { list, getOne, getVersions, create, update, publish };

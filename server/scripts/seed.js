@@ -5,13 +5,12 @@ const readline = require('readline');
 
 const { connectDB, disconnectDB } = require('../config/db');
 const env = require('../config/env');
-const User = require('../models/client/User');
 const Admin = require('../models/admin/Admin');
+const User = require('../models/client/User');
 const Course = require('../models/admin/Course');
-const Topic = require('../models/admin/Topic');
-const Lesson = require('../models/admin/Lesson');
-const Note = require('../models/admin/Note');
+const Subject = require('../models/admin/Subject');
 const Paper = require('../models/admin/Paper');
+const Note = require('../models/admin/Note');
 const Settings = require('../models/admin/Settings');
 const BackupSettings = require('../models/admin/BackupSettings');
 const LegalDoc = require('../models/admin/LegalDoc');
@@ -37,12 +36,14 @@ function ask(q) {
 
 function clear() { process.stdout.write('\x1b[2J\x1b[0f'); }
 function line(s = '') { console.log(s); }
+
 function heading(title) {
   line();
   line(`${C.bold}${C.cyan}${title}${C.reset}`);
   line(`${C.dim}${'─'.repeat(title.length)}${C.reset}`);
   line();
 }
+
 function ok(msg) { line(`${C.green}✔${C.reset} ${msg}`); }
 function warn(msg) { line(`${C.yellow}⚠${C.reset} ${msg}`); }
 function err(msg) { line(`${C.red}✖${C.reset} ${msg}`); }
@@ -53,13 +54,16 @@ function isProduction() {
 
 const SEED_PASSWORD = 'Password123!';
 
+const SEED_ADMINS = [
+  { name: 'Root Admin', email: 'admin@tvetgrid.local', role: 'superadmin' },
+];
+
 const SEED_USERS = [
-  { name: 'Root Admin',      email: 'admin@tvetgrid.local',   role: ROLES.ADMIN },
-  { name: 'John Teacher',    email: 'teacher1@tvetgrid.local', role: ROLES.TEACHER },
-  { name: 'Mary Teacher',    email: 'teacher2@tvetgrid.local', role: ROLES.TEACHER },
-  { name: 'Student One',     email: 'student1@tvetgrid.local', role: ROLES.STUDENT },
-  { name: 'Student Two',     email: 'student2@tvetgrid.local', role: ROLES.STUDENT },
-  { name: 'Student Three',   email: 'student3@tvetgrid.local', role: ROLES.STUDENT },
+  { name: 'John Teacher',  email: 'teacher1@tvetgrid.local', role: ROLES.TEACHER },
+  { name: 'Mary Teacher',  email: 'teacher2@tvetgrid.local', role: ROLES.TEACHER },
+  { name: 'Student One',   email: 'student1@tvetgrid.local', role: ROLES.STUDENT },
+  { name: 'Student Two',   email: 'student2@tvetgrid.local', role: ROLES.STUDENT },
+  { name: 'Student Three', email: 'student3@tvetgrid.local', role: ROLES.STUDENT },
 ];
 
 const SEED_COURSES = [
@@ -68,21 +72,36 @@ const SEED_COURSES = [
     subject: 'Electrical',
     syllabusCode: 'ELEC-101',
     description: 'Fundamentals of electricity: voltage, current, resistance, Ohm law, AC/DC basics.',
-    topics: ['Introduction to Electricity', 'Ohm Law & Power', 'Series & Parallel Circuits', 'AC Fundamentals'],
+    subjects: [
+      'Introduction to Electricity',
+      'Ohm Law & Power',
+      'Series & Parallel Circuits',
+      'AC Fundamentals',
+    ],
   },
   {
     title: 'Welding & Fabrication',
     subject: 'Mechanical',
     syllabusCode: 'MECH-201',
     description: 'Arc welding, MIG, TIG, safety, and fabrication techniques for trade certification.',
-    topics: ['Safety & PPE', 'Arc Welding Basics', 'Joint Types', 'Metal Fabrication'],
+    subjects: [
+      'Safety & PPE',
+      'Arc Welding Basics',
+      'Joint Types',
+      'Metal Fabrication',
+    ],
   },
   {
     title: 'ICT Fundamentals',
     subject: 'ICT',
     syllabusCode: 'ICT-301',
     description: 'Computer basics, operating systems, networking, and office productivity.',
-    topics: ['Computer Hardware', 'Operating Systems', 'Networking Basics', 'Office Applications'],
+    subjects: [
+      'Computer Hardware',
+      'Operating Systems',
+      'Networking Basics',
+      'Office Applications',
+    ],
   },
 ];
 
@@ -96,7 +115,7 @@ async function seedSettings() {
     contactAddress: 'Nairobi, Kenya',
     socialLinks: { facebook: '', twitter: '', instagram: '', tiktok: '', youtube: '' },
     faq: [
-      { q: 'What is TVETGrid?', a: 'A learning platform for TVET students — past papers, lessons, notes and live sessions.' },
+      { q: 'What is TVETGrid?', a: 'A learning platform for TVET students — past papers, notes and live sessions.' },
       { q: 'Is it free?', a: 'Most content is free. Live sessions may be scheduled by teachers.' },
     ],
     featureFlags: {},
@@ -119,14 +138,36 @@ async function seedSettings() {
   ok('BackupSettings seeded');
 
   const legal = [
-    { slug: 'terms',   title: 'Terms of Service',   bodyMd: '# Terms of Service\n\nDraft content — edit from admin.', version: 1, isPublished: false },
-    { slug: 'privacy', title: 'Privacy Policy',     bodyMd: '# Privacy Policy\n\nDraft content — edit from admin.', version: 1, isPublished: false },
-    { slug: 'cookies', title: 'Cookie Policy',      bodyMd: '# Cookie Policy\n\nDraft content — edit from admin.', version: 1, isPublished: false },
+    { slug: 'terms',   title: 'Terms of Service', bodyMd: '# Terms of Service\n\nDraft content — edit from admin.', version: 1, isPublished: false },
+    { slug: 'privacy', title: 'Privacy Policy',   bodyMd: '# Privacy Policy\n\nDraft content — edit from admin.',   version: 1, isPublished: false },
+    { slug: 'cookies', title: 'Cookie Policy',    bodyMd: '# Cookie Policy\n\nDraft content — edit from admin.',    version: 1, isPublished: false },
   ];
   for (const d of legal) {
     await LegalDoc.updateOne({ slug: d.slug }, { $setOnInsert: d }, { upsert: true });
   }
   ok(`LegalDocs: ${legal.length} upserted`);
+}
+
+async function seedAdmins() {
+  let count = 0;
+  const passwordHash = await password.hash(SEED_PASSWORD);
+
+  for (const a of SEED_ADMINS) {
+    const existing = await Admin.findOne({ email: a.email }).lean();
+    if (existing) continue;
+
+    await Admin.create({
+      name: a.name,
+      email: a.email,
+      phone: null,
+      passwordHash,
+      role: a.role,
+      permissions: ['*'],
+      isActive: true,
+    });
+    count++;
+  }
+  ok(`Admins: ${count} created (password: ${SEED_PASSWORD})`);
 }
 
 async function seedUsers() {
@@ -137,7 +178,7 @@ async function seedUsers() {
     const existing = await User.findOne({ email: u.email }).lean();
     if (existing) continue;
 
-    const doc = await User.create({
+    await User.create({
       name: u.name,
       email: u.email,
       phone: '254700000000',
@@ -146,10 +187,6 @@ async function seedUsers() {
       isActive: true,
       emailVerified: true,
     });
-
-    if (u.role === ROLES.ADMIN) {
-      await Admin.updateOne({ userId: doc._id }, { $setOnInsert: { userId: doc._id, permissions: ['*'] } }, { upsert: true });
-    }
     count++;
   }
   ok(`Users: ${count} created (password: ${SEED_PASSWORD})`);
@@ -157,7 +194,7 @@ async function seedUsers() {
 
 async function seedCourses() {
   let courses = 0;
-  let topics = 0;
+  let subjects = 0;
 
   for (const c of SEED_COURSES) {
     const slug = slugify(c.title);
@@ -171,93 +208,98 @@ async function seedCourses() {
           syllabusCode: c.syllabusCode,
           description: c.description,
           isPublished: true,
+          subjects: [],
         },
       },
       { upsert: true, new: true }
     );
     courses++;
 
-    for (let i = 0; i < c.topics.length; i++) {
-      const t = c.topics[i];
-      await Topic.updateOne(
-        { courseId: course._id, slug: slugify(t) },
-        { $setOnInsert: { courseId: course._id, name: t, slug: slugify(t), order: i + 1 } },
-        { upsert: true }
+    const subjectIds = [];
+    for (let i = 0; i < c.subjects.length; i++) {
+      const name = c.subjects[i];
+      const subjSlug = slugify(name);
+      const doc = await Subject.findOneAndUpdate(
+        { courseId: course._id, slug: subjSlug },
+        {
+          $setOnInsert: {
+            courseId: course._id,
+            name,
+            slug: subjSlug,
+            order: i + 1,
+          },
+        },
+        { upsert: true, new: true }
       );
-      topics++;
+      subjectIds.push(doc._id);
+      subjects++;
     }
+
+    course.subjects = subjectIds;
+    await course.save();
   }
-  ok(`Courses: ${courses} | Topics: ${topics}`);
+  ok(`Courses: ${courses} | Subjects: ${subjects}`);
 }
 
 async function seedContent() {
   const elec = await Course.findOne({ slug: 'basic-electricity' }).lean();
   if (!elec) { warn('Basic Electricity course missing — run seed courses first'); return; }
 
-  const topics = await Topic.find({ courseId: elec._id }).sort({ order: 1 }).lean();
-  const t0 = topics[0];
+  const subs = await Subject.find({ courseId: elec._id }).sort({ order: 1 }).lean();
+  if (!subs.length) { warn('No subjects in Basic Electricity'); return; }
 
-  if (t0) {
-    const lessonExists = await Lesson.findOne({ courseId: elec._id, title: 'Introduction to Voltage' }).lean();
-    if (!lessonExists) {
-      await Lesson.create({
-        courseId: elec._id,
-        topicId: t0._id,
-        title: 'Introduction to Voltage',
-        video: { url: 'https://res.cloudinary.com/demo/video/upload/dog.mp4', duration: 30, format: 'mp4' },
-        transcript: [
-          { t: 0, text: 'Welcome to Basic Electricity.' },
-          { t: 5, text: 'Voltage is the electrical pressure that pushes current.' },
-          { t: 12, text: 'Current is the flow of electrons.' },
-        ],
-        isPublished: true,
-        order: 1,
-      });
-    }
+  const s0 = subs[0];
 
-    const noteExists = await Note.findOne({ courseId: elec._id, title: 'Ohm Law Cheatsheet' }).lean();
-    if (!noteExists) {
-      await Note.create({
-        courseId: elec._id,
-        topicId: t0._id,
-        title: 'Ohm Law Cheatsheet',
-        bodyMd: '## Ohm Law\n\n**V = I × R**\n\n- V = Voltage (V)\n- I = Current (A)\n- R = Resistance (Ω)\n\n### Example\n12V across 4Ω → I = 3A.',
-        visibility: VISIBILITY.PUBLIC,
-      });
-    }
+  const noteExists = await Note.findOne({ courseId: elec._id, title: 'Ohm Law Cheatsheet' }).lean();
+  if (!noteExists) {
+    await Note.create({
+      courseId: elec._id,
+      subjectId: s0._id,
+      title: 'Ohm Law Cheatsheet',
+      description: 'Quick reference for Ohm law formulas',
+      bodyMd: '## Ohm Law\n\n**V = I × R**\n\n- V = Voltage (V)\n- I = Current (A)\n- R = Resistance (Ω)\n\n### Example\n12V across 4Ω → I = 3A.',
+      visibility: VISIBILITY.PUBLIC,
+    });
   }
 
   const paperExists = await Paper.findOne({ courseId: elec._id, year: 2024 }).lean();
   if (!paperExists) {
-    const q = [
+    const questions = [
       { qid: 'q1', stem: 'What is the SI unit of voltage?', options: ['Ampere', 'Volt', 'Ohm', 'Watt'], answer: 'Volt', marks: 2 },
       { qid: 'q2', stem: 'Ohm law states that V equals…', options: ['I + R', 'I × R', 'I / R', 'R / I'], answer: 'I × R', marks: 2 },
       { qid: 'q3', stem: 'Current in a 12V circuit with 4Ω resistance is…', options: ['3A', '48A', '0.33A', '16A'], answer: '3A', marks: 2 },
     ];
+
     await Paper.create({
+      title: 'Basic Electricity · 2024 · Paper 1',
       courseId: elec._id,
+      subjectId: s0._id,
       year: 2024,
-      subject: elec.subject,
       paperNo: 1,
       durationMin: 30,
-      totalMarks: q.reduce((s, x) => s + x.marks, 0),
-      questions: q.map((x, i) => ({
+      totalMarks: questions.reduce((s, q) => s + q.marks, 0),
+      isPublished: true,
+      sourcePdf: {
+        publicId: null,
+        url: null,
+        fileName: null,
+        size: null,
+        mimeType: 'application/pdf',
+      },
+      questions: questions.map((x, i) => ({
         ...x,
         order: i + 1,
         difficulty: DIFFICULTY.EASY,
-        topicIds: t0 ? [t0._id] : [],
-        linkedLessonId: t0 ? (await Lesson.findOne({ courseId: elec._id }).lean())?._id : undefined,
-        linkedVideoTs: 5,
       })),
-      isPublished: true,
     });
   }
 
-  ok('Content seeded (lesson, note, paper)');
+  ok('Content seeded (note + paper)');
 }
 
 async function seedAll() {
   await seedSettings();
+  await seedAdmins();
   await seedUsers();
   await seedCourses();
   await seedContent();
@@ -271,10 +313,11 @@ async function menu() {
   line(`${C.bold}${C.cyan}╰───────────────────────────────────────╯${C.reset}`);
   line();
   line(`  ${C.bold}1${C.reset}.  Seed all`);
-  line(`  ${C.bold}2${C.reset}.  Seed settings + legal`);
-  line(`  ${C.bold}3${C.reset}.  Seed users (admin, teachers, students)`);
-  line(`  ${C.bold}4${C.reset}.  Seed courses + topics`);
-  line(`  ${C.bold}5${C.reset}.  Seed sample content (lesson, note, paper)`);
+  line(`  ${C.bold}2${C.reset}.  Seed settings + backup settings + legal`);
+  line(`  ${C.bold}3${C.reset}.  Seed admins (standalone)`);
+  line(`  ${C.bold}4${C.reset}.  Seed users (teachers + students)`);
+  line(`  ${C.bold}5${C.reset}.  Seed courses + subjects`);
+  line(`  ${C.bold}6${C.reset}.  Seed sample content (note + paper)`);
   line();
   line(`  ${C.dim}0.  Exit${C.reset}`);
   line();
@@ -303,9 +346,10 @@ async function main() {
       heading('Seeding');
       if (choice === '1') await seedAll();
       else if (choice === '2') await seedSettings();
-      else if (choice === '3') await seedUsers();
-      else if (choice === '4') await seedCourses();
-      else if (choice === '5') await seedContent();
+      else if (choice === '3') await seedAdmins();
+      else if (choice === '4') await seedUsers();
+      else if (choice === '5') await seedCourses();
+      else if (choice === '6') await seedContent();
       else if (choice === '0') break;
       else continue;
       line();

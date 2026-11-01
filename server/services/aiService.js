@@ -34,15 +34,15 @@ async function cacheSet(key, value) {
   } catch (err) { logger.warn('aiService: cache write failed', { err: err.message }); }
 }
 
-async function tutorAsk({ userId, lessonId, question, context }) {
+async function tutorAsk({ userId, paperId, question, context }) {
   if (!question || !question.trim()) throw new Error('question required');
-  const key = hashKey({ q: question.trim().toLowerCase(), lessonId: lessonId || null, context: context || null });
+  const key = hashKey({ q: question.trim().toLowerCase(), paperId: paperId || null, context: context || null });
 
   const cached = await cacheGet(key);
   if (cached) return { ...cached, cached: true };
 
   const systemPrompt = context
-    ? `${TUTOR_SYSTEM_PROMPT}\n\nCurrent lesson context:\n${context}`
+    ? `${TUTOR_SYSTEM_PROMPT}\n\nCurrent context:\n${context}`
     : TUTOR_SYSTEM_PROMPT;
 
   const res = await complete({
@@ -55,7 +55,7 @@ async function tutorAsk({ userId, lessonId, question, context }) {
     model: res.model,
     tokensUsed: res.tokensUsed,
     provider: res.provider,
-    lessonId: lessonId || null,
+    paperId: paperId || null,
   };
 
   await cacheSet(key, result);
@@ -68,22 +68,20 @@ async function enqueueGenerateQuestions({ noteId, count = 5, userId }) {
   return { success: true, jobId: job.id, queued: true };
 }
 
-async function enqueueSummarizeTranscript({ lessonId, userId }) {
-  const job = await queueService.enqueue('ai.summarizeTranscript', { lessonId, userId });
-  return { success: true, jobId: job.id, queued: true };
-}
-
 async function deliverGenerateQuestions({ noteId, count }) {
   const Note = require('../models/admin/Note');
   const note = await Note.findById(noteId).lean();
   if (!note) throw new Error('Note not found');
+
+  const sourceText = note.bodyMd || '';
+  if (!sourceText.trim()) throw new Error('Note has no bodyMd content to generate questions from');
 
   const systemPrompt = `You are TVETGrid question generator. Produce multiple-choice past-paper style questions from the supplied notes.
 Return strict JSON: an array of objects with keys: stem (string), options (array of 4 strings), answer (string, exactly one of the options), solution (string), difficulty ("easy"|"medium"|"hard"), marks (number 1-5).
 Do not include any text outside the JSON array.`;
 
   const res = await complete({
-    message: `Generate ${count} questions from these notes:\n\n${note.bodyMd}`,
+    message: `Generate ${count} questions from these notes:\n\n${sourceText}`,
     systemPrompt,
   });
 
@@ -97,31 +95,10 @@ Do not include any text outside the JSON array.`;
   return { questions, tokensUsed: res.tokensUsed };
 }
 
-async function deliverSummarizeTranscript({ lessonId }) {
-  const Lesson = require('../models/admin/Lesson');
-  const lesson = await Lesson.findById(lessonId).lean();
-  if (!lesson) throw new Error('Lesson not found');
-  const transcriptText = (lesson.transcript || []).map((t) => t.text).join(' ');
-  if (!transcriptText) throw new Error('Lesson has no transcript');
-
-  const systemPrompt = `You are TVETGrid summarizer. Summarize lesson transcripts into clear study notes in Markdown.
-Use headings, short paragraphs, and bullet points. Preserve technical terms exactly.
-Aim for 200-400 words.`;
-
-  const res = await complete({
-    message: transcriptText.slice(0, 8000),
-    systemPrompt,
-  });
-  return { summaryMd: res.reply, tokensUsed: res.tokensUsed };
-}
-
 queueService.registerHandler('ai.generateQuestions', deliverGenerateQuestions);
-queueService.registerHandler('ai.summarizeTranscript', deliverSummarizeTranscript);
 
 module.exports = {
   tutorAsk,
   enqueueGenerateQuestions,
-  enqueueSummarizeTranscript,
   deliverGenerateQuestions,
-  deliverSummarizeTranscript,
 };

@@ -1,119 +1,181 @@
-const { z } = require('zod');
 const User = require('../../models/client/User');
-const Admin = require('../../models/admin/Admin');
-const asyncHandler = require('../../utils/asyncHandler');
+const Meeting = require('../../models/client/Meeting');
+const MeetingInvite = require('../../models/client/MeetingInvite');
+const Attempt = require('../../models/client/Attempt');
+const Progress = require('../../models/client/Progress');
+const Bookmark = require('../../models/client/Bookmark');
+const AISession = require('../../models/client/AISession');
 const ApiError = require('../../utils/ApiError');
-const ApiResponse = require('../../utils/ApiResponse');
-const paginate = require('../../utils/paginate');
-const emailService = require('../../services/emailService');
+const { ok } = require('../../utils/ApiResponse');
+const asyncHandler = require('../../utils/asyncHandler');
+const { build, meta } = require('../../utils/paginate');
+const { isValidObjectId } = require('../../utils/validateObjectId');
 const { ROLES } = require('../../utils/constants');
+const emailService = require('../../services/emailService');
+const smsService = require('../../services/smsService');
+const logger = require('../../utils/logger');
 
-const listQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  role: z.enum(Object.values(ROLES)).optional(),
-  q: z.string().optional(),
+async function findUserOr404(id) {
+  if (!isValidObjectId(id)) throw ApiError.badRequest('Invalid user id', 'VALIDATION_001');
+  const user = await User.findById(id);
+  if (!user) throw ApiError.notFound('User not found');
+  return user;
+}
+
+const list = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = build(req.query);
+  const filter = {};
+
+  if (req.query.role && [ROLES.STUDENT, ROLES.TEACHER].includes(req.query.role)) {
+    filter.role = req.query.role;
+  }
+  if (req.query.q && String(req.query.q).trim()) {
+    const q = String(req.query.q).trim();
+    filter.$or = [
+      { name: { $regex: q, $options: 'i' } },
+      { email: { $regex: q, $options: 'i' } },
+      { phone: { $regex: q, $options: 'i' } },
+    ];
+  }
+
+  const [items, total] = await Promise.all([
+    User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    User.countDocuments(filter),
+  ]);
+
+  items.forEach((u) => {
+    delete u.passwordHash;
+    delete u.refreshTokenHash;
+  });
+
+  return ok(res, items, 'OK', meta({ page, limit, total }));
 });
 
-const idSchema = z.object({ id: z.string().regex(/^[0-9a-f]{24}$/i) });
-
-const updateSchema = z.object({
-  name: z.string().min(2).max(80).optional(),
-  phone: z.string().optional(),
-  isActive: z.boolean().optional(),
+const getOne = asyncHandler(async (req, res) => {
+  const user = await findUserOr404(req.params.id);
+  const safe = user.toSafeJSON();
+  return ok(res, safe);
 });
 
-const roleSchema = z.object({ role: z.enum(Object.values(ROLES)) });
+const update = asyncHandler(async (req, res) => {
+  const user = await findUserOr404(req.params.id);
+  const { name, phone } = req.body || {};
 
-const disableSchema = z.object({ reason: z.string().max(300).optional() });
+  if (typeof name === 'string') user.name = name.trim();
+  if (typeof phone === 'string') user.phone = phone.trim() || null;
 
-async function list(req, res, next) {
-  try {
-    const q = listQuerySchema.parse(req.query);
-    const { page, limit, skip } = paginate.build(q);
-    const filter = {};
-    if (q.role) filter.role = q.role;
-    if (q.q) {
-      filter.$or = [
-        { name: { $regex: q.q, $options: 'i' } },
-        { email: { $regex: q.q, $options: 'i' } },
-      ];
-    }
-    const [items, total] = await Promise.all([
-      User.find(filter).select('-passwordHash').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-      User.countDocuments(filter),
-    ]);
-    return ApiResponse.ok(res, items, 'OK', paginate.meta({ page, limit, total }));
-  } catch (err) { next(err); }
-}
+  await user.save();
+  return ok(res, user.toSafeJSON(), 'User updated');
+});
 
-async function getById(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const user = await User.findById(id).select('-passwordHash').lean();
-    if (!user) throw ApiError.notFound('User not found');
-    const admin = user.role === ROLES.ADMIN ? await Admin.findOne({ userId: user._id }).lean() : null;
-    return ApiResponse.ok(res, { ...user, adminMeta: admin });
-  } catch (err) { next(err); }
-}
+const changeRole = asyncHandler(async (req, res) => {
+  const user = await findUserOr404(req.params.id);
+  const { role } = req.body || {};
 
-async function update(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const patch = updateSchema.parse(req.body);
-    const user = await User.findByIdAndUpdate(id, { $set: patch }, { new: true }).select('-passwordHash').lean();
-    if (!user) throw ApiError.notFound('User not found');
-    return ApiResponse.ok(res, user, 'User updated');
-  } catch (err) { next(err); }
-}
+  if (![ROLES.STUDENT, ROLES.TEACHER].includes(role)) {
+    throw ApiError.badRequest('Invalid role', 'VALIDATION_001');
+  }
+  if (String(user._id) === String(req.user.id)) {
+    throw ApiError.forbidden('You cannot change your own role', 'SELF_DEMOTE');
+  }
 
-async function changeRole(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const { role } = roleSchema.parse(req.body);
-    const user = await User.findById(id);
-    if (!user) throw ApiError.notFound('User not found');
-    if (user._id.equals(req.user.id) && role !== ROLES.ADMIN) {
-      throw ApiError.badRequest('Cannot demote yourself', 'SELF_DEMOTE');
-    }
-    const oldRole = user.role;
-    user.role = role;
-    await user.save();
+  const oldRole = user.role;
+  user.role = role;
+  await user.save();
 
-    if (role === ROLES.ADMIN) {
-      await Admin.updateOne({ userId: user._id }, { $setOnInsert: { permissions: ['*'] } }, { upsert: true });
-    } else {
-      await Admin.deleteOne({ userId: user._id });
-    }
+  emailService
+    .sendRoleChanged({
+      to: user.email,
+      name: user.name,
+      oldRole,
+      newRole: role,
+    })
+    .catch((e) => logger.warn('userController: roleChanged email failed', { err: e.message }));
 
-    emailService.sendRoleChanged({ to: user.email, name: user.name, oldRole, newRole: role })
+  if (user.phone) {
+    smsService
+      .sendAccountDisabled({ to: user.phone })
       .catch(() => {});
+  }
 
-    return ApiResponse.ok(res, { id: user._id, role }, 'Role updated');
-  } catch (err) { next(err); }
-}
+  return ok(res, user.toSafeJSON(), `Role changed to ${role}`);
+});
 
-async function disable(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const { reason } = disableSchema.parse(req.body || {});
-    const user = await User.findById(id);
-    if (!user) throw ApiError.notFound('User not found');
-    if (user._id.equals(req.user.id)) throw ApiError.badRequest('Cannot disable yourself', 'SELF_DISABLE');
-    user.isActive = false;
-    await user.save();
-    emailService.sendAccountDisabled({ to: user.email, name: user.name, reason }).catch(() => {});
-    return ApiResponse.ok(res, { id: user._id, isActive: false }, 'User disabled');
-  } catch (err) { next(err); }
-}
+const disable = asyncHandler(async (req, res) => {
+  const user = await findUserOr404(req.params.id);
+  if (String(user._id) === String(req.user.id)) {
+    throw ApiError.forbidden('You cannot disable yourself', 'SELF_DISABLE');
+  }
 
-async function enable(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const user = await User.findByIdAndUpdate(id, { $set: { isActive: true } }, { new: true }).select('-passwordHash').lean();
-    if (!user) throw ApiError.notFound('User not found');
-    return ApiResponse.ok(res, user, 'User enabled');
-  } catch (err) { next(err); }
-}
+  const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+  user.isActive = false;
+  user.disabledReason = reason;
+  user.disabledAt = new Date();
+  user.refreshTokenHash = null;
+  await user.save();
 
-module.exports = { list, getById, update, changeRole, disable, enable };
+  emailService
+    .sendAccountDisabled({ to: user.email, name: user.name, reason })
+    .catch((e) => logger.warn('userController: accountDisabled email failed', { err: e.message }));
+
+  if (user.phone) {
+    smsService.sendAccountDisabled({ to: user.phone }).catch(() => {});
+  }
+
+  return ok(res, user.toSafeJSON(), 'User disabled');
+});
+
+const enable = asyncHandler(async (req, res) => {
+  const user = await findUserOr404(req.params.id);
+  user.isActive = true;
+  user.disabledReason = null;
+  user.disabledAt = null;
+  await user.save();
+  return ok(res, user.toSafeJSON(), 'User enabled');
+});
+
+const remove = asyncHandler(async (req, res) => {
+  const user = await findUserOr404(req.params.id);
+  if (String(user._id) === String(req.user.id)) {
+    throw ApiError.forbidden('You cannot delete yourself', 'SELF_DELETE');
+  }
+
+  const userId = user._id;
+
+  const [attempts, progress, bookmarks, aiSessions, invites] = await Promise.all([
+    Attempt.deleteMany({ userId }),
+    Progress.deleteMany({ userId }),
+    Bookmark.deleteMany({ userId }),
+    AISession.deleteMany({ userId }),
+    MeetingInvite.deleteMany({ userId }),
+  ]);
+
+  let hostedMeetings = { deletedCount: 0 };
+  if (user.role === ROLES.TEACHER) {
+    const meetings = await Meeting.find({ hostId: userId }).select('_id').lean();
+    if (meetings.length) {
+      const ids = meetings.map((m) => m._id);
+      await MeetingInvite.deleteMany({ meetingId: { $in: ids } });
+      hostedMeetings = await Meeting.deleteMany({ _id: { $in: ids } });
+    }
+  }
+
+  await User.deleteOne({ _id: userId });
+
+  return ok(
+    res,
+    {
+      deleted: {
+        attempts: attempts.deletedCount,
+        progress: progress.deletedCount,
+        bookmarks: bookmarks.deletedCount,
+        aiSessions: aiSessions.deletedCount,
+        invites: invites.deletedCount,
+        hostedMeetings: hostedMeetings.deletedCount,
+      },
+    },
+    'User permanently deleted'
+  );
+});
+
+module.exports = { list, getOne, update, changeRole, disable, enable, remove };

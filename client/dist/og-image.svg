@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E1B4B"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <rect x="90" y="90" width="96" height="96" rx="24" fill="#4F46E5"/>
+  <path
+    d="M114 162 L138 108 L162 162 Z"
+    stroke="#FFFFFF"
+    stroke-width="7"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <circle cx="138" cy="150" r="5" fill="#FFFFFF"/>
+
+  <text
+    x="210"
+    y="162"
+    fill="#FFFFFF"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="56"
+    font-weight="800"
+    letter-spacing="-0.03em"
+  >TVETGrid</text>
+
+  <text
+    x="90"
+    y="310"
+    fill="#C7D2FE"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="40"
+    font-weight="600"
+  >Past papers, notes, AI tutor</text>
+
+  <text
+    x="90"
+    y="370"
+    fill="#C7D2FE"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="40"
+    font-weight="600"
+  >and live learning for TVET.</text>
+
+  <rect x="90" y="450" width="200" height="60" rx="12" fill="#4F46E5"/>
+  <text
+    x="190"
+    y="488"
+    fill="#FFFFFF"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="22"
+    font-weight="600"
+    text-anchor="middle"
+  >tvetgrid.co.ke</text>
+</svg>

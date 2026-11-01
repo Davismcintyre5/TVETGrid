@@ -1,120 +1,110 @@
-const { z } = require('zod');
-const backupService = require('../../services/backupService');
 const Backup = require('../../models/admin/Backup');
 const BackupSettings = require('../../models/admin/BackupSettings');
-const emailService = require('../../services/emailService');
-const ApiResponse = require('../../utils/ApiResponse');
 const ApiError = require('../../utils/ApiError');
+const { ok, created } = require('../../utils/ApiResponse');
+const asyncHandler = require('../../utils/asyncHandler');
+const { build, meta } = require('../../utils/paginate');
+const { isValidObjectId } = require('../../utils/validateObjectId');
+const backupService = require('../../services/backupService');
+const emailService = require('../../services/emailService');
+const logger = require('../../utils/logger');
 
-const oid = z.string().regex(/^[0-9a-f]{24}$/i);
-const idSchema = z.object({ id: oid });
+async function findBackupOr404(id) {
+  if (!isValidObjectId(id)) throw ApiError.badRequest('Invalid id', 'VALIDATION_001');
+  const b = await Backup.findById(id).lean();
+  if (!b) throw ApiError.notFound('Backup not found');
+  return b;
+}
 
-const settingsSchema = z.object({
-  autoEnabled: z.boolean().optional(),
-  frequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
-  hourUtc: z.coerce.number().int().min(0).max(23).optional(),
-  dayOfWeek: z.coerce.number().int().min(0).max(6).optional(),
-  dayOfMonth: z.coerce.number().int().min(1).max(28).optional(),
-  emailOnCompletion: z.boolean().optional(),
-  notifyEmails: z.array(z.string().email()).optional(),
-  retentionDays: z.coerce.number().int().min(1).max(365).optional(),
+const getSettings = asyncHandler(async (req, res) => {
+  const s = await BackupSettings.findOne({ singleton: 'main' }).lean();
+  return ok(res, s || {});
 });
 
-const emailSchema = z.object({
-  emails: z.array(z.string().email()).min(1),
-  note: z.string().max(500).optional(),
+const updateSettings = asyncHandler(async (req, res) => {
+  const allowed = ['autoEnabled', 'frequency', 'hourUtc', 'dayOfWeek', 'dayOfMonth', 'emailOnCompletion', 'notifyEmails', 'retentionDays'];
+  const patch = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) patch[key] = req.body[key];
+  }
+
+  const s = await BackupSettings.findOneAndUpdate(
+    { singleton: 'main' },
+    { $set: patch },
+    { new: true, upsert: true }
+  ).lean();
+
+  return ok(res, s, 'Backup settings saved');
 });
 
-async function createNow(req, res, next) {
-  try {
-    const backup = await backupService.runBackup({ type: 'manual', createdBy: req.user.id });
-    return ApiResponse.created(res, backup, 'Backup created');
-  } catch (err) { next(err); }
-}
+const create = asyncHandler(async (req, res) => {
+  const record = await backupService.runBackup({
+    type: 'manual',
+    createdBy: req.user.id,
+  });
+  return created(res, record, 'Backup created');
+});
 
-async function list(req, res, next) {
-  try {
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
-    const { items, total } = await backupService.list({ limit, skip: (page - 1) * limit });
-    return ApiResponse.ok(res, items, 'OK', { page, limit, total, pages: Math.ceil(total / limit) });
-  } catch (err) { next(err); }
-}
+const list = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = build(req.query);
+  const { items, total } = await backupService.list({ skip, limit });
+  return ok(res, items, 'OK', meta({ page, limit, total }));
+});
 
-async function getById(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const b = await backupService.getById(id);
-    if (!b) throw ApiError.notFound('Backup not found');
-    return ApiResponse.ok(res, b);
-  } catch (err) { next(err); }
-}
+const getOne = asyncHandler(async (req, res) => {
+  const b = await findBackupOr404(req.params.id);
+  return ok(res, b);
+});
 
-async function download(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const result = await backupService.download({ id });
-    return ApiResponse.ok(res, result, 'Download link');
-  } catch (err) { next(err); }
-}
+const download = asyncHandler(async (req, res) => {
+  await findBackupOr404(req.params.id);
+  const result = await backupService.download({ id: req.params.id });
+  return ok(res, result);
+});
 
-async function emailTo(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const { emails, note } = emailSchema.parse(req.body);
-    const b = await Backup.findById(id).lean();
-    if (!b) throw ApiError.notFound('Backup not found');
-    const { url } = await backupService.download({ id });
-    for (const to of emails) {
-      await emailService.sendBackupSent({
-        to, fileName: b.fileName, size: b.size, downloadUrl: url, note,
-        unsubscribeUrl: null,
-      }).catch(() => {});
-    }
-    await backupService.markEmailed({ id, emails });
-    return ApiResponse.ok(res, { sent: emails.length }, 'Backup emailed');
-  } catch (err) { next(err); }
-}
+const email = asyncHandler(async (req, res) => {
+  await findBackupOr404(req.params.id);
+  const { emails, note } = req.body || {};
+  if (!Array.isArray(emails) || !emails.length) {
+    throw ApiError.badRequest('emails array required', 'VALIDATION_001');
+  }
 
-async function remove(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const result = await backupService.remove({ id });
-    if (!result.success) throw ApiError.notFound('Backup not found');
-    return ApiResponse.ok(res, { id }, 'Backup deleted');
-  } catch (err) { next(err); }
-}
+  const dl = await backupService.download({ id: req.params.id, ttlSeconds: 600 });
 
-async function restore(req, res, next) {
-  try {
-    const { id } = idSchema.parse(req.params);
-    const b = await Backup.findById(id).lean();
-    if (!b || !b.publicId) throw ApiError.notFound('Backup not found');
-    const stats = await backupService.restore({ publicId: b.publicId });
-    emailService.sendRestoreCompleted({
-      to: req.user.email, backupFileName: b.fileName, restoreStatus: 'success',
-    }).catch(() => {});
-    return ApiResponse.ok(res, stats, 'Restore complete');
-  } catch (err) { next(err); }
-}
+  const results = await Promise.all(
+    emails.map((to) =>
+      emailService
+        .sendBackupSent({
+          to,
+          fileName: dl.fileName,
+          size: dl.size,
+          downloadUrl: dl.url,
+          note,
+        })
+        .catch((e) => {
+          logger.warn('backupController: email failed', { to, err: e.message });
+          return { success: false, error: e.message };
+        })
+    )
+  );
 
-async function getSettings(req, res, next) {
-  try {
-    const settings = await BackupSettings.findOne({ singleton: 'main' }).lean();
-    return ApiResponse.ok(res, settings || { singleton: 'main' });
-  } catch (err) { next(err); }
-}
+  await backupService.markEmailed({ id: req.params.id, emails });
 
-async function updateSettings(req, res, next) {
-  try {
-    const patch = settingsSchema.parse(req.body);
-    const settings = await BackupSettings.findOneAndUpdate(
-      { singleton: 'main' },
-      { $set: patch, $setOnInsert: { singleton: 'main' } },
-      { new: true, upsert: true }
-    ).lean();
-    return ApiResponse.ok(res, settings, 'Backup settings updated');
-  } catch (err) { next(err); }
-}
+  return ok(res, { sent: results.filter((r) => r.success).length, results });
+});
 
-module.exports = { createNow, list, getById, download, emailTo, remove, restore, getSettings, updateSettings };
+const restore = asyncHandler(async (req, res) => {
+  const b = await findBackupOr404(req.params.id);
+  if (!b.publicId) throw ApiError.badRequest('Backup has no publicId', 'VALIDATION_001');
+
+  const result = await backupService.restore({ publicId: b.publicId });
+  return ok(res, { restored: result.restored, errors: result.errors }, 'Restore complete');
+});
+
+const remove = asyncHandler(async (req, res) => {
+  await findBackupOr404(req.params.id);
+  const result = await backupService.remove({ id: req.params.id });
+  return ok(res, result, 'Backup deleted');
+});
+
+module.exports = { getSettings, updateSettings, create, list, getOne, download, email, restore, remove };

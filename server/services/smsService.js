@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 
 async function deliver({ to, template, data }) {
   if (!env.hdmBridge.smsEnabled) {
-    logger.info(`smsService: skipped (SMS_ENABLED=false)`, { template });
+    logger.info('smsService: skipped (SMS_ENABLED=false)', { template });
     return { success: true, skipped: true };
   }
   if (!smsTemplates[template]) throw new Error(`SMS template not found: ${template}`);
@@ -17,7 +17,12 @@ async function deliver({ to, template, data }) {
   const normalized = phone.normalize(to, env.whatsapp.defaultCountryCode);
   if (!normalized) throw new Error('Invalid phone number');
   const res = await hdmSendSms({ to: normalized, content });
-  return { success: true, messageId: res.messageId, status: res.status, creditsUsed: res.creditsUsed };
+  return {
+    success: true,
+    messageId: res.messageId,
+    status: res.status,
+    creditsUsed: res.creditsUsed,
+  };
 }
 
 async function dispatch({ to, template, data, inline = false }) {
@@ -25,17 +30,34 @@ async function dispatch({ to, template, data, inline = false }) {
     logger.warn(`smsService: no recipient for ${template}`);
     return { success: false, reason: 'no-recipient' };
   }
-  if (inline) {
-    try { return await deliver({ to, template, data }); }
-    catch (e) { logger.error(`smsService: inline ${template} failed`, { err: e.message }); return { success: false, error: e.message }; }
+
+  if (!env.hdmBridge.smsEnabled) {
+    logger.info('smsService: skipped (SMS_ENABLED=false)', { template });
+    return { success: true, skipped: true };
   }
+
+  if (inline) {
+    try {
+      return await deliver({ to, template, data });
+    } catch (e) {
+      logger.error(`smsService: inline ${template} failed`, { err: e.message });
+      return { success: false, error: e.message };
+    }
+  }
+
   try {
     const job = await queueService.enqueue('sms.send', { to, template, data });
     return { success: true, jobId: job.id, queued: true };
   } catch (err) {
-    logger.warn(`smsService: queue failed for ${template}, sending inline`, { err: err.message });
-    try { return await deliver({ to, template, data }); }
-    catch (e) { logger.error(`smsService: inline ${template} failed`, { err: e.message }); return { success: false, error: e.message }; }
+    logger.warn(`smsService: queue failed for ${template}, sending inline`, {
+      err: err.message,
+    });
+    try {
+      return await deliver({ to, template, data });
+    } catch (e) {
+      logger.error(`smsService: inline ${template} failed`, { err: e.message });
+      return { success: false, error: e.message };
+    }
   }
 }
 
@@ -60,23 +82,48 @@ function sendAccountDisabled({ to, inline }) {
 }
 
 function sendMeetingInvite({ to, meetingTitle, scheduledAt, joinUrl, inline }) {
-  return dispatch({ to, template: 'meetingInvite', data: { meetingTitle, scheduledAt, joinUrl }, inline });
+  return dispatch({
+    to,
+    template: 'meetingInvite',
+    data: { meetingTitle, scheduledAt, joinUrl },
+    inline,
+  });
 }
 
 function sendMeetingReminder({ to, meetingTitle, minutesUntil, joinUrl, inline }) {
-  return dispatch({ to, template: 'meetingReminder', data: { meetingTitle, minutesUntil, joinUrl }, inline });
+  return dispatch({
+    to,
+    template: 'meetingReminder',
+    data: { meetingTitle, minutesUntil, joinUrl },
+    inline,
+  });
 }
 
 function sendMeetingStarted({ to, meetingTitle, joinUrl, inline }) {
-  return dispatch({ to, template: 'meetingStarted', data: { meetingTitle, joinUrl }, inline });
+  return dispatch({
+    to,
+    template: 'meetingStarted',
+    data: { meetingTitle, joinUrl },
+    inline,
+  });
 }
 
 function sendMeetingCancelled({ to, meetingTitle, inline }) {
-  return dispatch({ to, template: 'meetingCancelled', data: { meetingTitle }, inline });
+  return dispatch({
+    to,
+    template: 'meetingCancelled',
+    data: { meetingTitle },
+    inline,
+  });
 }
 
 function sendRecordingReady({ to, meetingTitle, recordingUrl, inline }) {
-  return dispatch({ to, template: 'recordingReady', data: { meetingTitle, recordingUrl }, inline });
+  return dispatch({
+    to,
+    template: 'recordingReady',
+    data: { meetingTitle, recordingUrl },
+    inline,
+  });
 }
 
 queueService.registerHandler('sms.send', async (payload) => deliver(payload));

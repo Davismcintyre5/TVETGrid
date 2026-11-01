@@ -34,12 +34,21 @@ async function enqueue(name, payload, opts = {}) {
   });
 }
 
+function loadAllHandlers() {
+  require('./emailService');
+  require('./smsService');
+  require('./aiService');
+  logger.info('queueService: handlers registered', { count: handlers.size });
+}
+
 async function startWorker() {
   if (!env.redis.enabled) {
     logger.warn('queueService: worker skipped (Redis disabled)');
     return null;
   }
   if (worker) return worker;
+
+  loadAllHandlers();
 
   worker = new Worker(
     QUEUE_NAME,
@@ -58,7 +67,10 @@ async function startWorker() {
     logger.info(`queueService: job done ${job.name}`, { jobId: job.id });
   });
   worker.on('failed', (job, err) => {
-    logger.error(`queueService: job failed ${job?.name}`, { jobId: job?.id, err: err.message });
+    logger.error(`queueService: job failed ${job?.name}`, {
+      jobId: job?.id,
+      err: err.message,
+    });
   });
 
   logger.info('queueService: worker started');
@@ -76,4 +88,11 @@ async function stopWorker() {
   }
 }
 
-module.exports = { QUEUE_NAME, enqueue, registerHandler, startWorker, stopWorker };
+module.exports = {
+  QUEUE_NAME,
+  enqueue,
+  registerHandler,
+  startWorker,
+  stopWorker,
+  getQueue,
+};

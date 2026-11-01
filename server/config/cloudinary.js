@@ -8,12 +8,17 @@ cloudinary.config({
   secure: true,
 });
 
-function signUpload({ folder, resourceType = 'auto', userId }) {
+function signUpload({ folder, resourceType = 'auto' }) {
   const timestamp = Math.round(Date.now() / 1000);
   const targetFolder = folder || env.cloudinary.folder;
-  const params = { timestamp, folder: targetFolder };
-  if (userId) params.context = `userId=${userId}`;
+
+  const params = {
+    timestamp,
+    folder: targetFolder,
+  };
+
   const signature = cloudinary.utils.api_sign_request(params, env.cloudinary.apiSecret);
+
   return {
     signature,
     timestamp,
@@ -29,9 +34,20 @@ async function deleteAsset(publicId, resourceType = 'image') {
   return cloudinary.uploader.destroy(publicId, { resource_type: resourceType, invalidate: true });
 }
 
-function signedUrl(publicId, resourceType = 'image', ttlSeconds = 300) {
+function signedUrl(publicId, resourceType = 'image', ttlSeconds = 300, format = null) {
   const expiresAt = Math.round(Date.now() / 1000) + ttlSeconds;
-  return cloudinary.utils.private_download_url(publicId, resourceType, { expires_at: expiresAt });
+
+  let ext = format;
+  if (!ext) {
+    const match = String(publicId).match(/\.([a-z0-9]+)$/i);
+    if (match) ext = match[1];
+  }
+
+  return cloudinary.utils.private_download_url(
+    publicId,
+    ext || '',
+    { expires_at: expiresAt, resource_type: resourceType }
+  );
 }
 
 module.exports = { cloudinary, signUpload, deleteAsset, signedUrl };

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { cloudinary, signedUrl } = require('../config/cloudinary');
+const { cloudinary } = require('../config/cloudinary');
 const env = require('../config/env');
 const Backup = require('../models/admin/Backup');
 const { BACKUP_STATUS } = require('../utils/constants');
@@ -43,12 +43,12 @@ function reviveDoc(doc) {
   if (!doc || typeof doc !== 'object') return doc;
 
   if (doc._id && typeof doc._id === 'string' && HEX24.test(doc._id)) {
-    try { doc._id = new mongoose.Types.ObjectId(doc._id); } catch { /* keep */ }
+    try { doc._id = new mongoose.Types.ObjectId(doc._id); } catch { }
   }
 
   for (const [k, v] of Object.entries(doc)) {
     if (typeof v === 'string' && HEX24.test(v) && (k.endsWith('Id') || k === 'userId' || k === 'courseId')) {
-      try { doc[k] = new mongoose.Types.ObjectId(v); } catch { /* keep */ }
+      try { doc[k] = new mongoose.Types.ObjectId(v); } catch { }
     }
     if (Array.isArray(v) && k.endsWith('Ids')) {
       doc[k] = v.map((id) => (typeof id === 'string' && HEX24.test(id) ? new mongoose.Types.ObjectId(id) : id));
@@ -60,7 +60,9 @@ function reviveDoc(doc) {
 
 async function runBackup({ type = 'manual', createdBy = null } = {}) {
   const start = Date.now();
-  const fileName = `tvetgrid-${timestamp()}.json`;
+  const stamp = timestamp();
+  const fileName = `tvetgrid-${stamp}.json`;
+  const publicId = `tvetgrid/backups/tvetgrid-${stamp}`;
 
   const record = await Backup.create({
     status: BACKUP_STATUS.RUNNING,
@@ -71,13 +73,12 @@ async function runBackup({ type = 'manual', createdBy = null } = {}) {
 
   try {
     const { dump, documentsCount, collections } = await collectAll();
-    const json = JSON.stringify(dump);
+    const json = JSON.stringify(dump, null, 2);
     const buffer = Buffer.from(json, 'utf8');
 
-    const upload = await cloudinary.uploader.upload(bufferToDataUri(buffer), {
+    const upload = await cloudinary.uploader.upload(bufferToDataUri(buffer, 'application/json'), {
       resource_type: 'raw',
-      folder: `${env.cloudinary.folder}/backups`,
-      public_id: fileName.replace(/\.json$/, ''),
+      public_id: publicId,
       format: 'json',
     });
 
@@ -92,6 +93,8 @@ async function runBackup({ type = 'manual', createdBy = null } = {}) {
 
     logger.info('backupService: completed', {
       id: String(record._id),
+      publicId: upload.public_id,
+      secureUrl: upload.secure_url,
       size: buffer.length,
       docs: documentsCount,
       ms: Date.now() - start,
@@ -110,8 +113,10 @@ async function runBackup({ type = 'manual', createdBy = null } = {}) {
 async function restore({ publicId }) {
   if (!publicId) throw new Error('publicId required');
 
-  const url = signedUrl(publicId, 'raw', 300);
-  const res = await fetch(url);
+  const b = await Backup.findOne({ publicId }).lean();
+  if (!b || !b.url) throw new Error('Backup not found');
+
+  const res = await fetch(b.url);
   if (!res.ok) throw new Error(`Download failed: ${res.status}`);
   const dump = await res.json();
   if (!dump || !dump.collections) throw new Error('Invalid backup file');
@@ -149,14 +154,17 @@ async function getById(id) {
   return Backup.findById(id).lean();
 }
 
-async function download({ id, ttlSeconds = 300 }) {
+async function download({ id }) {
   const b = await Backup.findById(id).lean();
   if (!b || !b.publicId) throw new Error('Backup not found');
-  const url = signedUrl(b.publicId, 'raw', ttlSeconds);
+
   await Backup.updateOne(
     { _id: id },
     { $inc: { downloadCount: 1 }, $set: { downloadedAt: new Date() } }
   );
+
+  const url = `${b.url}?fl_attachment=${encodeURIComponent(b.fileName)}`;
+
   return { url, fileName: b.fileName, size: b.size };
 }
 
@@ -171,6 +179,7 @@ async function markEmailed({ id, emails }) {
 async function remove({ id }) {
   const b = await Backup.findById(id);
   if (!b) return { success: false, reason: 'not-found' };
+
   if (b.publicId) {
     try {
       await cloudinary.uploader.destroy(b.publicId, { resource_type: 'raw', invalidate: true });
@@ -178,6 +187,7 @@ async function remove({ id }) {
       logger.warn('backupService: cloudinary delete failed', { err: err.message });
     }
   }
+
   await Backup.deleteOne({ _id: id });
   return { success: true };
 }
@@ -186,17 +196,28 @@ async function pruneOld({ retentionDays = 30 } = {}) {
   const cutoff = new Date(Date.now() - retentionDays * 86400000);
   const old = await Backup.find({ createdAt: { $lt: cutoff } });
   let removed = 0;
+
   for (const b of old) {
     if (b.publicId) {
       try {
         await cloudinary.uploader.destroy(b.publicId, { resource_type: 'raw', invalidate: true });
-      } catch { /* ignore */ }
+      } catch { }
     }
     await Backup.deleteOne({ _id: b._id });
     removed++;
   }
+
   logger.info('backupService: pruned', { removed, retentionDays });
   return { removed };
 }
 
-module.exports = { runBackup, restore, list, getById, download, markEmailed, remove, pruneOld };
+module.exports = {
+  runBackup,
+  restore,
+  list,
+  getById,
+  download,
+  markEmailed,
+  remove,
+  pruneOld,
+};

@@ -5,7 +5,7 @@ const env = require('../config/env');
 const MeetingInvite = require('../models/client/MeetingInvite');
 const AuditLog = require('../models/admin/AuditLog');
 const User = require('../models/client/User');
-const { INVITE_RSVP, ROLES } = require('../utils/constants');
+const { INVITE_RSVP } = require('../utils/constants');
 
 const QUEUE_NAME = 'scheduler-cleanup';
 
@@ -27,7 +27,6 @@ async function handler() {
 
   const unverified = await User.deleteMany({
     emailVerified: false,
-    role: { $ne: ROLES.ADMIN },
     createdAt: { $lt: cutoff7d },
   });
 

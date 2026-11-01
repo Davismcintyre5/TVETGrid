@@ -1,7 +1,5 @@
 const ApiError = require('../../utils/ApiError');
 const { verifyAccess } = require('../../utils/tokens');
-const { ROLES } = require('../../utils/constants');
-const User = require('../../models/client/User');
 const Admin = require('../../models/admin/Admin');
 
 module.exports = async (req, res, next) => {
@@ -12,20 +10,33 @@ module.exports = async (req, res, next) => {
 
     const payload = verifyAccess(token);
     if (!payload?.sub) return next(ApiError.unauthorized('Invalid token payload'));
+    if (payload.type !== 'admin') {
+      return next(ApiError.forbidden('Admin token required', 'FORBIDDEN'));
+    }
 
-    const user = await User.findById(payload.sub).select('_id role name email isActive').lean();
-    if (!user) return next(ApiError.unauthorized('User not found'));
-    if (!user.isActive) return next(ApiError.forbidden('Account disabled'));
-    if (user.role !== ROLES.ADMIN) return next(ApiError.forbidden('Admin access required'));
+    const admin = await Admin.findById(payload.sub)
+      .select('_id role name email isActive permissions')
+      .lean();
 
-    const admin = await Admin.findOne({ userId: user._id }).select('permissions').lean();
+    if (!admin) return next(ApiError.unauthorized('Admin not found'));
+    if (!admin.isActive) return next(ApiError.forbidden('Account disabled'));
 
-    req.user = { id: String(user._id), role: user.role, name: user.name, email: user.email };
-    req.admin = { permissions: admin?.permissions || ['*'] };
+    req.user = {
+      id: String(admin._id),
+      role: admin.role,
+      name: admin.name,
+      email: admin.email,
+      permissions: admin.permissions || ['*'],
+    };
+
     next();
   } catch (err) {
-    if (err.name === 'TokenExpiredError') return next(ApiError.unauthorized('Token expired', 'TOKEN_EXPIRED'));
-    if (err.name === 'JsonWebTokenError') return next(ApiError.unauthorized('Invalid token'));
+    if (err.name === 'TokenExpiredError') {
+      return next(ApiError.unauthorized('Token expired', 'TOKEN_EXPIRED'));
+    }
+    if (err.name === 'JsonWebTokenError') {
+      return next(ApiError.unauthorized('Invalid token'));
+    }
     next(err);
   }
 };

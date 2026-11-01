@@ -2,9 +2,9 @@ const { cloudinary, signUpload, deleteAsset, signedUrl } = require('../config/cl
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 
-async function sign({ folder, resourceType = 'auto', userId }) {
+async function sign({ folder, resourceType = 'auto' }) {
   try {
-    return signUpload({ folder, resourceType, userId });
+    return signUpload({ folder, resourceType });
   } catch (err) {
     logger.error('uploadService.sign failed', { err: err.message });
     throw ApiError.internal('Could not sign upload', 'UPLOAD_SIGN_FAILED');

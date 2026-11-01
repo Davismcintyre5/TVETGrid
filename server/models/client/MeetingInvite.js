@@ -3,23 +3,42 @@ const { INVITE_RSVP, INVITE_CHANNEL } = require('../../utils/constants');
 
 const meetingInviteSchema = new mongoose.Schema(
   {
-    meetingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', required: true, index: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
-    email: { type: String, lowercase: true, trim: true },
-    phone: { type: String, trim: true },
-    name: { type: String, trim: true },
+    meetingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Meeting',
+      required: true,
+      index: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    email: { type: String, required: true, lowercase: true, trim: true, index: true },
+    name: { type: String, default: '' },
+    phone: { type: String, default: null },
+    rsvp: {
+      type: String,
+      enum: Object.values(INVITE_RSVP),
+      default: INVITE_RSVP.INVITED,
+      index: true,
+    },
+    channel: {
+      type: String,
+      enum: Object.values(INVITE_CHANNEL),
+      default: INVITE_CHANNEL.EMAIL,
+    },
     token: { type: String, required: true, unique: true, index: true },
-    shortCode: { type: String, unique: true, sparse: true, index: true },
-    channels: [{ type: String, enum: Object.values(INVITE_CHANNEL) }],
-    rsvp: { type: String, enum: Object.values(INVITE_RSVP), default: INVITE_RSVP.INVITED, index: true },
-    messageId: { type: String },
-    reminderSentAt: { type: Date },
-    joinedAt: { type: Date },
-    leftAt: { type: Date },
+    shortCode: { type: String, required: true, index: true },
+    joinedAt: { type: Date, default: null },
+    leftAt: { type: Date, default: null },
+    reminderSentAt: { type: Date, default: null },
   },
-  { timestamps: true, versionKey: false }
+  { timestamps: true }
 );
 
+meetingInviteSchema.index({ meetingId: 1, email: 1 }, { unique: true });
 meetingInviteSchema.index({ meetingId: 1, rsvp: 1 });
 
 module.exports = mongoose.model('MeetingInvite', meetingInviteSchema);

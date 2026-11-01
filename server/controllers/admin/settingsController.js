@@ -1,43 +1,29 @@
-const { z } = require('zod');
 const Settings = require('../../models/admin/Settings');
+const { ok } = require('../../utils/ApiResponse');
+const asyncHandler = require('../../utils/asyncHandler');
 const { getSettings, invalidateSettingsCache } = require('../../utils/getSettings');
-const ApiResponse = require('../../utils/ApiResponse');
 
-const updateSchema = z.object({
-  appName: z.string().min(1).max(80).optional(),
-  logoUrl: z.string().url().optional().or(z.literal('')),
-  supportEmail: z.string().email().optional(),
-  supportPhone: z.string().optional(),
-  contactAddress: z.string().optional(),
-  socialLinks: z.object({
-    facebook: z.string().optional(),
-    twitter: z.string().optional(),
-    instagram: z.string().optional(),
-    tiktok: z.string().optional(),
-    youtube: z.string().optional(),
-  }).optional(),
-  faq: z.array(z.object({ q: z.string(), a: z.string() })).optional(),
-  featureFlags: z.record(z.any()).optional(),
+const get = asyncHandler(async (req, res) => {
+  const s = await getSettings({ fresh: req.query.fresh === 'true' });
+  return ok(res, s);
 });
 
-async function get(req, res, next) {
-  try {
-    const settings = await getSettings({ fresh: true });
-    return ApiResponse.ok(res, settings);
-  } catch (err) { next(err); }
-}
+const update = asyncHandler(async (req, res) => {
+  const allowed = ['appName', 'logoUrl', 'supportEmail', 'supportPhone', 'contactAddress', 'socialLinks', 'faq', 'featureFlags'];
+  const patch = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) patch[key] = req.body[key];
+  }
 
-async function update(req, res, next) {
-  try {
-    const patch = updateSchema.parse(req.body);
-    const settings = await Settings.findOneAndUpdate(
-      { singleton: 'main' },
-      { $set: patch, $setOnInsert: { singleton: 'main' } },
-      { new: true, upsert: true }
-    ).lean();
-    await invalidateSettingsCache();
-    return ApiResponse.ok(res, settings, 'Settings updated');
-  } catch (err) { next(err); }
-}
+  const doc = await Settings.findOneAndUpdate(
+    { singleton: 'main' },
+    { $set: patch },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  ).lean();
+
+  await invalidateSettingsCache();
+
+  return ok(res, doc, 'Settings saved');
+});
 
 module.exports = { get, update };
