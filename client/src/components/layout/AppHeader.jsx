@@ -62,19 +62,19 @@ export default function AppHeader({ onMenuClick }) {
   return (
     <header className="sticky top-0 z-30 bg-[var(--bg-primary)]/95 backdrop-blur border-b border-[var(--border-color)]">
       <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
-        <div className="h-16 flex items-center gap-2 sm:gap-4">
+        <div className="h-16 flex items-center gap-3 sm:gap-4">
           <button
             type="button"
             onClick={onMenuClick}
             className="md:hidden p-2 -ml-1 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] shrink-0"
             aria-label="Open menu"
           >
-            <HiBars3 className="w-5 h-5" />
+            <HiBars3 className="w-6 h-6" />
           </button>
 
           <Logo size="md" />
 
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={toggle}
@@ -99,14 +99,14 @@ export default function AppHeader({ onMenuClick }) {
                   className="shrink-0"
                 />
                 <div className="hidden sm:block text-left min-w-0">
-                  <p className="text-sm font-medium text-[var(--text-primary)] truncate max-w-[140px]">
+                  <p className="text-base font-semibold text-[var(--text-primary)] truncate max-w-[140px]">
                     {user?.name || 'Account'}
                   </p>
-                  <p className="text-[11px] text-[var(--text-muted)] truncate max-w-[140px] leading-tight">
+                  <p className="text-sm text-[var(--text-secondary)] truncate max-w-[140px] leading-tight">
                     {user?.email || ''}
                   </p>
                 </div>
-                <HiChevronDown className="hidden sm:block w-4 h-4 text-[var(--text-muted)] shrink-0" />
+                <HiChevronDown className="hidden sm:block w-5 h-5 text-[var(--text-muted)] shrink-0" />
               </button>
 
               {menuOpen && (
@@ -121,25 +121,25 @@ export default function AppHeader({ onMenuClick }) {
                       size="md"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      <p className="text-base font-semibold text-[var(--text-primary)] truncate">
                         {user?.name || 'Account'}
                       </p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
+                      <p className="text-sm text-[var(--text-secondary)] truncate">
                         {user?.email || ''}
                       </p>
                     </div>
                   </div>
 
                   {user && !user.emailVerified && (
-                    <div className="px-4 py-2 bg-[var(--warning-bg)] border-b border-[var(--warning-border)]">
+                    <div className="px-4 py-2.5 bg-[var(--warning-bg)] border-b border-[var(--warning-border)]">
                       <Link
                         to="/verify"
                         onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-2 text-xs text-[var(--warning-text)]"
+                        className="flex items-center gap-2 text-sm font-medium text-[var(--warning-text)]"
                       >
-                        <HiOutlineExclamationTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <HiOutlineExclamationTriangle className="w-4 h-4 shrink-0" />
                         <span className="flex-1">Verify your email</span>
-                        <HiArrowRight className="w-3.5 h-3.5" />
+                        <HiArrowRight className="w-4 h-4" />
                       </Link>
                     </div>
                   )}
@@ -150,9 +150,9 @@ export default function AppHeader({ onMenuClick }) {
                         key={to}
                         to={to}
                         onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+                        className="flex items-center gap-3 px-4 py-3 text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
                       >
-                        <Icon className="w-4 h-4 shrink-0" />
+                        <Icon className="w-5 h-5 shrink-0" />
                         {label}
                       </Link>
                     ))}
@@ -162,9 +162,9 @@ export default function AppHeader({ onMenuClick }) {
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)]"
+                      className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium text-[var(--danger-text)] hover:bg-[var(--danger-bg)]"
                     >
-                      <HiArrowRightStartOnRectangle className="w-4 h-4 shrink-0" />
+                      <HiArrowRightStartOnRectangle className="w-5 h-5 shrink-0" />
                       Logout
                     </button>
                   </div>

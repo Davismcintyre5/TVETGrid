@@ -26,7 +26,7 @@ const NAV = [
 
 function navClass({ isActive }) {
   return [
-    'relative text-sm font-medium transition-colors px-3 py-2 rounded-lg',
+    'relative text-base font-medium transition-colors px-4 py-2 rounded-lg',
     isActive
       ? 'text-[var(--brand-primary)] bg-[var(--sidebar-hover)]'
       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-hover)]',
@@ -88,16 +88,18 @@ export default function PublicHeader() {
               aria-expanded={mobileOpen}
             >
               {mobileOpen ? (
-                <HiXMark className="w-5 h-5" />
+                <HiXMark className="w-6 h-6" />
               ) : (
-                <HiBars3 className="w-5 h-5" />
+                <HiBars3 className="w-6 h-6" />
               )}
             </button>
+            
+            {/* The Logo component now renders the large text next to the icon */}
             <Logo size="md" />
           </div>
 
           {/* Center nav */}
-          <nav className="hidden md:flex flex-1 justify-center items-center gap-1">
+          <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
             {NAV.map((item) => (
               <NavLink key={item.to} to={item.to} end={item.exact} className={navClass}>
                 {item.label}
@@ -123,10 +125,10 @@ export default function PublicHeader() {
                   variant="primary"
                   size="sm"
                   onClick={() => navigate('/app')}
-                  icon={<HiArrowRight className="w-3.5 h-3.5" />}
+                  icon={<HiArrowRight className="w-4 h-4" />}
                 >
-                  <span className="hidden sm:inline">Launch App</span>
-                  <span className="sm:hidden">App</span>
+                  <span className="hidden sm:inline text-sm font-semibold">Launch App</span>
+                  <span className="sm:hidden text-sm font-semibold">App</span>
                 </Button>
 
                 {isAuthenticated && user && (
@@ -139,21 +141,21 @@ export default function PublicHeader() {
                       aria-expanded={userMenuOpen}
                       aria-label="Account menu"
                     >
-                      <Avatar name={user.name} src={user.avatarUrl} size="sm" />
+                      <Avatar name={user.name} src={user.avatarUrl} size="md" />
                     </button>
 
                     {userMenuOpen && (
                       <div
                         role="menu"
-                        className="absolute right-0 top-full mt-2 w-56 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-[var(--shadow-lg)] overflow-hidden animate-fade-in z-40"
+                        className="absolute right-0 top-full mt-2 w-64 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl shadow-[var(--shadow-lg)] overflow-hidden animate-fade-in z-40"
                       >
                         <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center gap-3">
                           <Avatar name={user.name} src={user.avatarUrl} size="md" />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                            <p className="text-base font-semibold text-[var(--text-primary)] truncate">
                               {user.name}
                             </p>
-                            <p className="text-xs text-[var(--text-muted)] truncate">
+                            <p className="text-sm text-[var(--text-secondary)] truncate">
                               {user.email}
                             </p>
                           </div>
@@ -162,21 +164,21 @@ export default function PublicHeader() {
                           <Link
                             to="/app"
                             onClick={() => setUserMenuOpen(false)}
-                            className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+                            className="block px-4 py-2.5 text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
                           >
                             Dashboard
                           </Link>
                           <Link
                             to="/app/profile"
                             onClick={() => setUserMenuOpen(false)}
-                            className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+                            className="block px-4 py-2.5 text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
                           >
                             Profile
                           </Link>
                           <Link
                             to="/app/meetings"
                             onClick={() => setUserMenuOpen(false)}
-                            className="block px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+                            className="block px-4 py-2.5 text-base font-medium text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
                           >
                             Meetings
                           </Link>
@@ -185,9 +187,9 @@ export default function PublicHeader() {
                           <button
                             type="button"
                             onClick={handleLogout}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)]"
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-base font-medium text-[var(--danger-text)] hover:bg-[var(--danger-bg)]"
                           >
-                            <HiArrowRightOnRectangle className="w-4 h-4" />
+                            <HiArrowRightOnRectangle className="w-5 h-5" />
                             Logout
                           </button>
                         </div>
@@ -203,7 +205,7 @@ export default function PublicHeader() {
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate('/login')}
-                  className="hidden sm:inline-flex"
+                  className="hidden sm:inline-flex text-sm font-semibold"
                 >
                   Login
                 </Button>
@@ -212,8 +214,8 @@ export default function PublicHeader() {
                   size="sm"
                   onClick={() => navigate('/register')}
                 >
-                  <span className="hidden sm:inline">Register</span>
-                  <span className="sm:hidden">Sign up</span>
+                  <span className="hidden sm:inline text-sm font-semibold">Register</span>
+                  <span className="sm:hidden text-sm font-semibold">Sign up</span>
                 </Button>
               </div>
             )}
@@ -233,7 +235,7 @@ export default function PublicHeader() {
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   [
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+                    'flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium',
                     isActive
                       ? 'bg-[var(--sidebar-hover)] text-[var(--brand-primary)]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)]',
@@ -260,13 +262,13 @@ export default function PublicHeader() {
                   Launch App
                 </Button>
                 {isAuthenticated && user && (
-                  <div className="flex items-center gap-3 px-3 py-2">
-                    <Avatar name={user.name} src={user.avatarUrl} size="sm" />
+                  <div className="flex items-center gap-3 px-3 py-3">
+                    <Avatar name={user.name} src={user.avatarUrl} size="md" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      <p className="text-base font-semibold text-[var(--text-primary)] truncate">
                         {user.name}
                       </p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
+                      <p className="text-sm text-[var(--text-secondary)] truncate">
                         {user.email}
                       </p>
                     </div>
@@ -276,7 +278,7 @@ export default function PublicHeader() {
                       className="p-2 rounded text-[var(--danger-text)] hover:bg-[var(--danger-bg)]"
                       aria-label="Logout"
                     >
-                      <HiArrowRightOnRectangle className="w-4 h-4" />
+                      <HiArrowRightOnRectangle className="w-5 h-5" />
                     </button>
                   </div>
                 )}
